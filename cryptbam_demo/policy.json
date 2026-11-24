@@ -1,0 +1,14 @@
+{
+  "gene_sets": {
+    "breast_cancer":  {"bed": "generanges/breast_cancer_risk_genes.bed",  "depth": 10},
+    "ovarian_cancer": {"bed": "generanges/ovarian_cancer_risk_genes.bed", "depth": 10},
+    "a-thalassemia":  {"bed": "generanges/a-thalassemia_risk_genes.bed",  "depth": 10}
+  },
+  "recipients": {
+    "breast_analyst":  {"pubkey": "keys/breast_analyst.pub",  "reads": ["breast_cancer"]},
+    "ovarian_analyst": {"pubkey": "keys/ovarian_analyst.pub", "reads": ["ovarian_cancer"]},
+    "thal_analyst":    {"pubkey": "keys/thal_analyst.pub",    "reads": ["a-thalassemia"]},
+    "cnv_analyst":     {"pubkey": "keys/cnv_analyst.pub",     "coverage": ["breast_cancer", "ovarian_cancer", "a-thalassemia"]},
+    "owner":           {"pubkey": "keys/owner.pub", "reads": ["*"], "coverage": ["*"], "background": true}
+  }
+}

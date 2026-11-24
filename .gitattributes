@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.bam binary
+*.bai binary
+*.gz binary
+*.gzi binary
+*.c4gh binary

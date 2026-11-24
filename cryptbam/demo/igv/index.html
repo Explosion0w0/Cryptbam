@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cryptbam IGV views</title>
+<script src="https://cdn.jsdelivr.net/npm/igv@2.15.11/dist/igv.min.js"></script>
+<style>
+  :root { --bg: #fafafa; --fg: #222; --muted: #666; --accent: #0b6bcb; --line: #ddd; }
+  body { margin: 0; font: 14px/1.5 system-ui, "Noto Sans TC", sans-serif; background: var(--bg); color: var(--fg); }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  button { padding: 6px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; }
+  button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  #note { padding: 8px 16px; color: var(--muted); }
+  #igv { padding: 0 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>cryptbam × IGV</h1>
+  <button data-view="alpha">α-thalassemia 帶因者 (HG00684 vs NA12878)</button>
+  <button data-view="access">BRCA1 各身分視角</button>
+</header>
+<div id="note"></div>
+<div id="igv"></div>
+<script>
+// Served from demo/ (npx http-server demo -p 8765), page at /igv/
+const bam = (name, path, height = 160) => ({ name, type: "alignment", format: "bam",
+  url: "../" + path, indexURL: "../" + path + ".bai", height, displayMode: "SQUISHED" });
+const bdg = (name, path, max = 50) => ({ name, type: "wig", format: "bedgraph", url: "../" + path,
+  autoscale: false, min: 0, max, height: 60, color: "#c0392b" });
+const bed = (name, path) => ({ name, type: "annotation", format: "bed", url: "../" + path, height: 30 });
+const VIEWS = {
+  alpha: { locus: "chr16:140000-200000",
+    note: "HG00684 原始 BAM 在 165–185 kb 深度掉一半（--SEA 帶因）；thal_analyst 解出的兩人都是平的 10×；只有 cnv_analyst 的深度檔看得到缺失。",
+    tracks: [bed("a-thalassemia gene set", "beds/a-thalassemia.bed"),
+      bam("HG00684 原始（帶因者）", "data/HG00684.alpha.bam"), bam("HG00684 thal_analyst", "out/HG00684.thal_analyst.bam"),
+      bdg("HG00684 真實深度 (cnv_analyst)", "out/HG00684.cnv_analyst.bedgraph"),
+      bam("NA12878 原始（正常）", "data/NA12878.genes.bam"), bam("NA12878 thal_analyst", "out/thal_analyst.bam"),
+      bdg("NA12878 真實深度 (cnv_analyst)", "out/cnv_analyst.bedgraph")] },
+  access: { locus: "chr17:43044294-43125364",
+    note: "同一個加密檔：breast 與 ovarian 分析人員看到相同的 BRCA1（10×），thal_analyst 沒有 BRCA1 的 reads。",
+    tracks: [bed("breast_cancer gene set", "beds/breast_cancer.bed"),
+      bam("原始 BAM", "data/NA12878.genes.bam", 120), bam("breast_analyst", "out/breast_analyst.bam", 120),
+      bam("ovarian_analyst", "out/ovarian_analyst.bam", 120), bam("thal_analyst", "out/thal_analyst.bam", 60),
+      bdg("cnv_analyst 真實深度", "out/cnv_analyst.bedgraph")] },
+};
+let browser;
+async function show(v) {
+  document.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  document.getElementById("note").textContent = VIEWS[v].note;
+  if (browser) igv.removeBrowser(browser);
+  browser = await igv.createBrowser(document.getElementById("igv"),
+    { genome: "hg38", locus: VIEWS[v].locus, tracks: VIEWS[v].tracks, showSampleNames: false });
+}
+document.querySelectorAll("button").forEach(b => b.onclick = () => show(b.dataset.view));
+show(location.hash.slice(1) in VIEWS ? location.hash.slice(1) : "alpha");
+</script>
+</body>
+</html>

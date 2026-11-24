@@ -1,0 +1,37 @@
+conda activate cryptbam
+export PYTHONPATH=/mnt/d/Cryptbam/cryptbam
+cd /mnt/d/Cryptbam/cryptbam_demo
+mkdir -p out
+
+
+
+# ===== 1. generate keys =====
+bash scripts/keygen.sh
+ls keys
+
+
+# ===== 2. original sequence: every gene readable =====
+bash scripts/view_range.sh seq/breast_cancer_patient_seq.bam all
+
+
+# ===== 3. cryptbam encrypt =====
+python -m cryptbam encrypt --bam seq/breast_cancer_patient_seq.bam --policy policy.json --out out/patient | grep depth=
+
+
+# ===== 4. breast cancer analyst =====
+python -m cryptbam decrypt --sk keys/breast_analyst.sec --in out/patient.bam.c4gh --out out/breast.bam
+bash scripts/view_range.sh out/breast.bam all
+
+
+# ===== 5. ovarian cancer analyst =====
+python -m cryptbam decrypt --sk keys/ovarian_analyst.sec --in out/patient.bam.c4gh --out out/ovarian.bam
+bash scripts/view_range.sh out/ovarian.bam all
+
+
+# ===== 6. a-thalassemia analyst =====
+python -m cryptbam decrypt --sk keys/thal_analyst.sec --in out/patient.bam.c4gh --out out/thal.bam
+bash scripts/view_range.sh out/thal.bam all
+
+
+# ===== 7. outsider (key not in policy) =====
+python -m cryptbam decrypt --sk keys/outsider.sec --in out/patient.bam.c4gh --out out/outsider.bam
