@@ -40,9 +40,9 @@ cd cryptbam_demo && bash scripts/keygen.sh    # 接著照 demo.txt 執行
 | 真實資料 demo | ✅ 完成 | NA12878、HG00684（α 型海貧帶因者），`scripts/demo_real.sh` |
 | 精簡 demo 資料夾 | ✅ 完成 | `cryptbam_demo/` + `demo.txt` + `view_range.sh` |
 | IGV 視覺化 | ⚠️ 部分 | batch 檔與 igv.js 頁面已產生，尚未在 IGV 中實際確認畫面 |
-| 檔案大小保護的量化實驗 | ❌ 未做 | 見下方指標 ③ |
-| 遮蔽偵測攻擊（Mask Detection）實驗 | ❌ 未做 | 見下方指標 ④ |
-| 效能量測（加解密時間） | ❌ 未做 | 只有整體 demo 時間，沒有分項計時 |
+| 量化比較（不加密 / Crypt4GH / cryptbam） | ✅ 完成 | `scripts/benchmark.py`，結果見下方 |
+| 遮蔽偵測攻擊（Mask Detection）實驗 | ❌ 未做 | 見下方「尚未量測」 |
+| 效能量測（加解密時間） | ✅ 完成 | 單次執行計時，見 Performance |
 
 ### Demo 的 gene set
 
@@ -67,65 +67,66 @@ cd cryptbam_demo && bash scripts/keygen.sh    # 接著照 demo.txt 執行
 
 ---
 
-## 成果報告可用的量化指標
+## 量化結果：不加密 vs 一般 Crypt4GH vs cryptbam
 
-報告建議分成三面向：**Security（洩漏降低多少）**、**Utility（仍保留多少可用資料）**、**Performance（時間與儲存成本）**。下表的「目前結果」都是已實際跑出的數字；「—」表示尚未量測。
+用 `python3 cryptbam/scripts/benchmark.py`（WSL、`cryptbam` 環境）重現，結果寫在 `cryptbam/out/bench/benchmark.md`。攻擊者分兩種：
 
-### ① Coverage Protection（定序深度保護）
+* **外部人員**：拿到檔案，沒有金鑰。
+* **內部分析人員**：持有自己 gene set 的合法金鑰。一般 Crypt4GH 只有一把 key，分析人員一解密就是整份原始 BAM；cryptbam 只解得開自己的區段。
 
-| 指標 | 定義 | 目前結果 | 重現方式 |
-|---|---|---|---|
-| 深度 → CNV AUROC | 以每 1 kb 視窗的 \|log2(深度 / 中位數)\| 區分 CNV 與正常視窗；0.5 = 亂猜 | 不縮放 0.959 → K=10 **0.494** | `scripts/evaluate.py`（模擬資料） |
-| 等位基因比例 → CNV AUROC | 以異型合子 SNP 的 \|AF − 0.5\| 區分重複區與其他區（殘餘洩漏） | 不縮放 0.950；K=5 0.642；K=10 0.864；K=20 0.942；K=10 + quantize **0.500** | 同上 |
-| 缺失區 / 兩側深度比（真實資料） | 海貧 `--SEA` 缺失區平均深度 ÷ 兩側平均深度 | 帶因者 HG00684 原始 **0.57**、正常 NA12878 1.16 → 解密後兩人都是 **1.00** | `cryptbam_demo/demo.txt` 或 `scripts/depth_bins.py` |
-| BRCA1 缺失深度比（模擬） | 模擬的 BRCA1 異型合子缺失區 ÷ 兩側 | 不加密 / 一般 Crypt4GH 0.45 → cryptbam **1.00** | `scripts/compare.py` |
-| Coverage Leakage Rate | 攻擊者取得的未授權位置深度數 ÷ 未授權位置總數 | 設計上為 0（深度檔每類一把 key，未授權類別解不開）；尚未以實驗統計 | 待補：對每位讀者解深度檔並計數 |
-| Buffer Zone 效果 | 授權區外加緩衝區後，從授權區深度推測鄰近區 CNV 的 AUROC | — | 尚未實作 |
+資料：模擬 30× 樣本（已知 CNV 與變異）、真實 1000 Genomes HG00684（α 型海貧帶因者）與 NA12878（正常對照）。三位分析人員（乳癌、卵巢癌、海貧）結果一致，下表列出三人中最差的值。
 
-### ② Boundary Read Protection（跨界讀序保護）
+### Security：洩漏降低多少
 
-| 指標 | 定義 | 目前結果 | 重現方式 |
-|---|---|---|---|
-| Sequence Leakage Rate | 洩漏的未授權比對鹼基數 ÷ 原始未授權比對鹼基總數 × 100% | 所有 K 設定下皆 **0%**；早期「不切割」基線為 0.048% | `scripts/evaluate.py` |
-| 可讀的未授權鹼基數（乳癌分析人員） | 解密後落在授權區外的比對鹼基 | 不加密 / 一般 Crypt4GH 8,531,285 → cryptbam **0** | `scripts/compare.py` |
-| Mate 位置洩漏 | 指向授權區外的 mate 座標數 | 56,892 → **0**（早期基線另有 248 筆） | `scripts/compare.py` |
-| Metadata 洩漏 | header 中的指令路徑、病人備註 | 有 → **已移除**（`@PG CL`、`@CO`） | `scripts/compare.py` |
-| Authorized Data Retention | 解密後保留的授權區比對鹼基 ÷ 原始授權區比對鹼基 | — | 待補；可用變異 recall 當替代指標（見 Utility） |
+| 指標 | 定義 | 不加密 | 一般 Crypt4GH | cryptbam |
+|---|---|---|---|---|
+| 外部人員能否解密 | 用不在名單上的金鑰解密 | 不需金鑰 | 否 | 否 |
+| ② Sequence Leakage Rate | 解密後落在授權區外的比對鹼基 ÷ 原始授權區外鹼基 | 100% | 100% | **0%**（模擬、真實皆是） |
+| ② Mate 位置洩漏 | 指向授權區外的 mate 座標數（真實資料） | 30,296–61,711 | 同左 | **0** |
+| ② Metadata 洩漏 | header 中的指令路徑 `@PG CL`、病人備註 `@CO` | 有 | 有 | **無** |
+| ① Coverage Leakage Rate | 能得知深度的授權區外位置 ÷ 原始有覆蓋的授權區外位置 | 100% | 100% | **0%** |
+| ① 深度 → CNV AUROC | 1 kb 視窗深度偏離中位數的程度區分 CNV（三組 gene set 全區；0.5 = 亂猜） | 0.970 | 0.970 | **0.503** |
+| ① 等位比例 → CNV AUROC | 異型合子 SNP 的 \|AF − 0.5\| 區分重複區 | 0.955 | 0.955 | 0.548–0.893（殘餘洩漏，見限制） |
+| ① 海貧帶因者深度比 | `--SEA` 缺失區 ÷ 兩側（HG00684 帶因 vs NA12878 正常） | 0.57 vs 1.16 | 0.57 vs 1.16 | **1.00 vs 1.00**（海貧分析人員） |
+| ① 模擬 BRCA1 缺失深度比 | 缺失區 ÷ 兩側 | 0.46 | 0.46 | **1.00** |
+| ③ Size Inference AUROC（外部人員） | 只看加密檔總大小，判斷有無 BRCA1 缺失（8 個模擬樣本，4 個有缺失） | — | **1.000**（10.405 vs 10.515 MB） | **0.625** |
+| ③ Size Inference AUROC（內部人員） | 海貧分析人員從 edit list 得知「被跳過的位元組數」 | — | 可直接讀全部 | K=10：**0.625**；不縮放：0.938 |
+| ③ 外部人員可見的 header 封包數 | 檔頭明文的封包數量 | — | 2 | 18（透露金鑰與讀者數量） |
 
-### ③ File Size Protection（檔案大小保護）
+重點：
 
-| 指標 | 定義 | 目前結果 | 重現方式 |
-|---|---|---|---|
-| Size Inference AUROC | 以區段大小預測該區屬於高或低資料量（或有無 CNV）；比較 padding 前後 | — | 待補：需多個樣本，可用 1000 Genomes 多人資料 |
-| 區段大小與深度的相關 | 縮放 / 不縮放時，區段位元組數與真實深度的相關係數 | 定性：縮放後區段大小只跟長度有關；不縮放與 `_background` 與深度成正比 | 待補 |
-| 外部人員可見資訊 | 沒有金鑰時能得到什麼 | 只有檔案總大小與 header 封包數 | `scripts/compare.py` |
+* 一般 Crypt4GH **連外部人員都會洩漏 CNV**：缺失少了 reads，整個加密檔小了約 110 KB，AUROC 1.0。cryptbam 的基因區段經過縮放，大小只跟區間長度有關，降到 0.625（8 個樣本下接近亂猜）。
+* cryptbam 若**不縮放**（K=0），內部人員仍可從 edit list 推測缺失（AUROC 0.938），所以縮放對檔案大小保護也是必要的。
+* 模擬中乳癌分析人員的深度比 AUROC 雖算出 0.875，但兩組數值是 1.00002 對 1.00002–1.00003，只差 1–2 個位置，實際上沒有可用訊號；樣本數少才排得出順序。
 
-### ④ Zero-Coverage Protection（零覆蓋度保護）
+### Utility：仍保留多少可用資料
 
-| 指標 | 定義 | 目前結果 | 重現方式 |
-|---|---|---|---|
-| 未授權區的可見性 | 解密結果中未授權區是否出現 0× 或任何 reads | 完全不存在（reads = 0，深度檔該區解不開），不會出現「人工 0×」 | `cryptbam_demo/scripts/view_range.sh` |
-| 授權區真實 0× 的 N 比例 | 授權區內同型合子缺失，縮放後 reads 中 N 的比例 | UGT2B17（NA12878）缺失區 **95% 為 N**：仍可被偵測 | `scripts/depth_bins.py` |
-| Mask Detection Precision / Recall / AUROC | 攻擊者從輸出判斷哪些區域被刻意遮蔽 | — | 待補；需先定義「遮蔽位置是否屬於秘密」 |
+| 指標 | 不加密 / 一般 Crypt4GH | cryptbam（K=10） |
+|---|---|---|
+| 授權區內有覆蓋的位置保留率 | 100% | **100%**（模擬、真實皆是） |
+| 變異 recall（模擬，對照真實答案，排除 CNV 區） | 98.2–100% | **98.2–100%**（與不加密相同） |
+| 變異一致性（真實 HG00684，與原始 BAM 的 bcftools 結果比對） | — | 乳癌 343/372（92%）、卵巢癌 300/322（93%）、海貧 159/173（92%） |
+| samtools / bcftools 相容 | ✓ | ✓ |
+| 官方 crypt4gh 1.8.6 解出相同位元組 | ✓ | ✓ |
 
-### Utility（可用性）
+真實資料約 8% 的差異來自重複序列的 indel 與少數 SNP；提高 K（例如 K=20）可改善，代價是等位比例洩漏增加。
 
-| 指標 | 目前結果 |
-|---|---|
-| 變異 recall（模擬，排除 CNV 區） | 所有 K 皆 **99.4%** |
-| BRCA1 變異保留（真實 NA12878，bcftools） | 172 個中 K=10 保留 **159**（92%）；K=20 保留 165 |
-| 工具相容性 | samtools quickcheck / index / view、bcftools 皆可直接使用 |
-| 官方 Crypt4GH 相容 | 官方 1.8.6 解出的位元組與本工具 **完全相同** |
+### Performance：時間與儲存成本
 
-### Performance（成本）
+| 指標 | 一般 Crypt4GH | cryptbam |
+|---|---|---|
+| 加密後大小（真實，原始 4.48 MB） | 4.48 MB | 1.58 MB reads + 3.28 MB 深度檔 |
+| 加密後大小（模擬，原始 10.40 MB） | 10.41 MB | 5.97 MB reads + 4.00 MB 深度檔 |
+| 加密時間（真實） | 0.08 s | 8.56 s（縮放與深度計算佔大部分） |
+| 解密時間（乳癌分析人員，真實） | 0.27 s | 0.08 s（只解自己的段） |
 
-| 指標 | 目前結果 |
-|---|---|
-| 檔案大小（模擬 30×） | 不縮放 10.30 MB；K=10 5.97 MB；K=30 6.49 MB |
-| 檔案大小（真實 HG00684） | 原始 BAM 4.5 MB → `.bam.c4gh` 1.6 MB + `.depth.bdg.c4gh` 3.3 MB |
-| 執行時間 | 完整真實資料 demo（9 步，含加解密、bcftools）約 35 秒；加密與解密的分項時間 — |
+時間為 WSL 上單次執行的結果，僅供量級參考。
 
----
+### 尚未量測
+
+* ④ Mask Detection Precision / Recall：需先定義「遮蔽位置是否屬於秘密」；目前只確認未授權區在解密結果中完全不存在，以及授權區內真實 0× 會變成 N（NA12878 UGT2B17 缺失區 95% 為 N）。
+* Buffer Zone 對鄰近區 CNV 推測的影響。
+* 更多樣本的 Size Inference（目前 8 個）。
 
 ## 遇到的問題
 
@@ -146,7 +147,7 @@ cd cryptbam_demo && bash scripts/keygen.sh    # 接著照 demo.txt 執行
 
 | 限制 | 影響 | 可能方向 |
 |---|---|---|
-| 檔案大小洩漏 | 讀者可從 edit list 算出別人區段大小；`_background` 大小與深度成正比 | 背景區也縮放，或補齊到固定大小 |
+| 檔案大小洩漏 | 讀者可從 edit list 算出別人區段大小；`_background` 大小與深度成正比；header 封包數透露讀者數量 | 背景區也縮放，或補齊到固定大小 |
 | 等位基因比例洩漏 CNV | K=10 時 AUROC 0.864 | `quantize_af`，但不適合腫瘤低 VAF |
 | 授權區真實 0× 會變成 N | 同型合子缺失仍看得出 | 尚無好解法；填參考序列會捏造結果 |
 | 異型合子缺失區沒有異型合子 SNP | 可能從「一長段同型合子」推測缺失 | 尚未實測 |
@@ -164,10 +165,8 @@ cd cryptbam_demo && bash scripts/keygen.sh    # 接著照 demo.txt 執行
 
 ## 下一步
 
-- [ ] 補做 Size Inference AUROC（多個 1000 Genomes 樣本）
+- [ ] Size Inference 擴大樣本數（目前 8 個模擬樣本），並改用多個 1000 Genomes 真實樣本
 - [ ] 補做 Mask Detection Attack，並明確定義遮蔽位置是否為秘密
-- [ ] 量測 Authorized Data Retention 與 Coverage Leakage Rate
-- [ ] 加密 / 解密分項計時
 - [ ] 實測「異型合子 SNP 消失」能否推測缺失
 - [ ] 決定 demo 預設 K（目前 10）
 - [ ] `owner_manifest.json` 改為加密保存

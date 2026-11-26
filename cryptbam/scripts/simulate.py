@@ -130,7 +130,12 @@ def main():
     ap.add_argument("--depth", type=float, default=30)
     ap.add_argument("--read-len", type=int, default=150)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--skip-cnv", type=int, action="append", default=[],
+                    help="index into CNVS to leave out (repeatable), e.g. 0 = no BRCA1 deletion")
+    ap.add_argument("--no-ref", action="store_true", help="do not write ref.fa (many-sample runs)")
     a = ap.parse_args()
+    global CNVS
+    CNVS = [c for i, c in enumerate(CNVS) if i not in a.skip_cnv]
     rng = random.Random(a.seed)
     nrng = np.random.default_rng(a.seed)
     os.makedirs(a.outdir, exist_ok=True)
@@ -140,15 +145,15 @@ def main():
     for c, ln in CONTIGS:
         ws, we = WINDOWS[c]
         refs[c] = "".join(rng.choices("ACGT", weights=[.3, .2, .2, .3], k=we - ws))
-    # reference FASTA (N outside windows)
-    with open(os.path.join(a.outdir, "ref.fa"), "w") as f:
-        for c, ln in CONTIGS:
-            ws, we = WINDOWS[c]
-            f.write(f">{c}\n")
-            s = "N" * ws + refs[c] + "N" * (ln - we)
-            for i in range(0, ln, 80):
-                f.write(s[i:i + 80] + "\n")
-    pysam.faidx(os.path.join(a.outdir, "ref.fa"))
+    if not a.no_ref:                         # reference FASTA (N outside windows)
+        with open(os.path.join(a.outdir, "ref.fa"), "w") as f:
+            for c, ln in CONTIGS:
+                ws, we = WINDOWS[c]
+                f.write(f">{c}\n")
+                s = "N" * ws + refs[c] + "N" * (ln - we)
+                for i in range(0, ln, 80):
+                    f.write(s[i:i + 80] + "\n")
+        pysam.faidx(os.path.join(a.outdir, "ref.fa"))
 
     for c, _ in CONTIGS:
         ws, we = WINDOWS[c]
